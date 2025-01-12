@@ -51,7 +51,7 @@ const userSchema = new Schema(
   }
 );
 
-// it will run every time before saving th data
+// it will run every time before saving the data
 userSchema.pre("save", async function (next) { //use normal function, bcz i want to use 'this'
   if (!this.isModified("password")) return next();
 
@@ -78,6 +78,7 @@ userSchema.methods.generateAccessToken = function () {
     }
   );
 };
+
 userSchema.methods.generateRefreshToken = function () {
   return jwt.sign(
     {

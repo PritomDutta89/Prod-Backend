@@ -1,3 +1,4 @@
+//by this no need to write try-catch e=in every controller
 const asyncHandler = (requestHandler) => {
   return (req, res, next) => {
     Promise.resolve(requestHandler(req, res, next)).catch((err) => next(err));
