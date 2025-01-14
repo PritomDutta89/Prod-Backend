@@ -4,7 +4,37 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessAndRefreshTokens = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    // save refreshToken in DB - we can access all by user, bcz it comes from mongoose
+    user.refreshToken = refreshToken;
+    user.save({ validateBeforeSave: false }); //it will disable other validation which we set in User model
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      500,
+      "Something went wrong while generating refresh and access token."
+    );
+  }
+};
+
 const registerUser = asyncHandler(async (req, res) => {
+  // process
+  // get user details from frontend
+  // validation - not empty
+  // check if user already exists: username, email
+  // check for images, check for avatar
+  // upload them to cloudinary, avatar
+  // create user object - create entry in db
+  // remove password and refresh token field from response
+  // check for user creation
+  // return res
+
   // get user details
   const { username, email, fullName, password } = req.body;
 
@@ -74,4 +104,37 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, createdUser, "User registered successfully."));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  // process -
+  // req body -> data
+  // username or email
+  //find the user
+  //password check
+  //access and referesh token
+  //send cookie
+
+  const { email, username, password } = req.body;
+
+  if (!username || !email) {
+    throw new ApiError(400, "Username or email is required.");
+  }
+
+  const existedUser = await User.findOne({
+    $or: [{ username }, { email }],
+  });
+
+  if (!existedUser) {
+    throw new ApiError(404, "User does not exist.");
+  }
+
+  // validating password - check how to call my methods
+  const isPasswordValid = await existedUser.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Password incorrect.");
+  }
+
+  // now create access and refresh token - we use in multiple time, so we put this in a separate method
+});
+
+export { registerUser, loginUser };
