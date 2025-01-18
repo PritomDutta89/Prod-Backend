@@ -110,7 +110,7 @@ const loginUser = asyncHandler(async (req, res) => {
   // username or email
   //find the user
   //password check
-  //access and referesh token
+  //access and refresh token
   //send cookie
 
   const { email, username, password } = req.body;
@@ -135,6 +135,64 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   // now create access and refresh token - we use in multiple time, so we put this in a separate method
+  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
+    existedUser._id
+  );
+
+  // i want to send refresh token in client side, so i call updated data from DB, and also remove some confidential data
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  // now use cookies to send data in client side
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken, // here also pass AT and RT bcz if frontend dev want to store this data by its own - but its not a good way to send
+        },
+        "User logged in successfully"
+      )
+    );
 });
 
-export { registerUser, loginUser };
+const logoutUser = asyncHandler(async (req, res) => {
+  // process
+  // remove RT & AT cookies
+  // reset RT in DB
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $set: {
+        refreshToken: undefined,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged Out"));
+});
+
+export { registerUser, loginUser, logoutUser };
