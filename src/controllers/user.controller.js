@@ -349,6 +349,148 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover image updated successfully."));
 });
 
+// use aggregation pipeline - here find total subscriber of my channel
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+
+  if (!username?.trim()) {
+    throw new ApiError(400, "Username is missing.");
+  }
+
+  const channel = await User.aggregate([
+    {
+      // here find channel name
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    {
+      // here find that specific channel subscribers
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      // here find how many channel i subscribed
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      // here we add all new/additional [what we find after joining] data with exiting user model
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers", //by this we count subscribers
+        },
+        channelsSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        // now checked user subscribe that particular channel or not - if subscriber then show white color in subscribed btn otherwise shows red, return true and false in frontend
+        isSubscribed: {
+          $cond: {
+            if: {
+              $in: [req.user?._id, "$subscribers.subscriber"],
+            },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      // what specific data you want to return
+      $project: {
+        fullName: 1,
+        username: 1,
+        subscribersCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+
+  console.log("channel: ", channel);
+
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel does not exist.");
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, channel[0], "User channel fetched successfully.")
+    );
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      // here i will get user data/model
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id),
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        // here implement nested pipeline
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              // here coming too many User data, but i dont want all, so use Project - hre use diff technique, you can create another seperate stage/pipelines for $project, but here i use directly wth of pipelines
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          // Optional - its only do for frontend, no need take 0th index, directly take objects
+          {
+            $addFields: {
+              // override owner fields, normally we get array, but by this we return object to frontend, for easy purpose
+              owner: {
+                // fetch first/0th index element
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
+    );
+});
+
 export {
   registerUser,
   loginUser,
@@ -358,4 +500,6 @@ export {
   getCurrentUser,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
+  getWatchHistory,
 };
